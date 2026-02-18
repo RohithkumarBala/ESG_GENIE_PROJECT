@@ -1,0 +1,15 @@
+# Secret Keys
+.env
+
+# Virtual Environment
+venv/
+__pycache__/
+
+# Local Database (ChromaDB)
+chroma_db/
+
+# Large PDF files (Optional, but recommended)
+data.pdf
+
+# OS generated files
+.DS_Store
