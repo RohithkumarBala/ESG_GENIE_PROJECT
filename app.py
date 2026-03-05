@@ -78,6 +78,7 @@ import time
 from dotenv import load_dotenv
 from google import genai
 from exa_py import Exa
+from tavily import TavilyClient
 from langchain_chroma import Chroma
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
@@ -85,9 +86,14 @@ from langchain_google_genai import GoogleGenerativeAIEmbeddings
 load_dotenv()
 st.set_page_config(page_title="ESG Genie", page_icon="🌱", layout="wide")
 
+# Search provider toggle: "exa" (default) or "tavily"
+SEARCH_PROVIDER = os.getenv("SEARCH_PROVIDER", "exa").lower()
+
 # Initialize API Clients
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 exa = Exa(api_key=os.getenv("EXA_API_KEY"))
+if SEARCH_PROVIDER == "tavily":
+    tavily_client = TavilyClient(api_key=os.getenv("TAVILY_API_KEY"))
 
 # Use the stable embedding model
 embeddings = GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-001")
@@ -152,7 +158,12 @@ if prompt := st.chat_input("Ask about sustainability targets or market trends...
         # FULL RAG PROCESS
         with st.spinner("🤖 Routing & Retrieving..."):
             decision = get_routing_decision(prompt)
-            source_tag = "🔍 Internal PDF" if "LOCAL" in decision else "🌐 Live Web"
+            if "LOCAL" in decision:
+                source_tag = "🔍 Internal PDF"
+            elif SEARCH_PROVIDER == "tavily":
+                source_tag = "🌐 Live Web (Tavily)"
+            else:
+                source_tag = "🌐 Live Web (Exa)"
             
             context = ""
             # Retrieve Data
@@ -161,8 +172,12 @@ if prompt := st.chat_input("Ask about sustainability targets or market trends...
                 context = "\n".join([d.page_content for d in results])
             else:
                 try:
-                    search = exa.search_and_contents(prompt, num_results=3, text=True)
-                    context = "\n".join([r.text for r in search.results])
+                    if SEARCH_PROVIDER == "tavily":
+                        search = tavily_client.search(prompt, max_results=3, search_depth="advanced")
+                        context = "\n".join([r["content"] for r in search["results"]])
+                    else:
+                        search = exa.search_and_contents(prompt, num_results=3, text=True)
+                        context = "\n".join([r.text for r in search.results])
                 except:
                     context = "Could not retrieve web data. Answering from general knowledge."
 
